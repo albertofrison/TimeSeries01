@@ -135,28 +135,38 @@ legend ("bottomright", legend = c("2022 - Actuals", "ETS Method Forecast", "ARIM
 
 #####
 # Trying to get better looking charts... no luck so far...
+# 23/07 SOLVED IT!!
+# 1. convert all ts and forecast data into a data frame - use as.numeric to coherce the bastard
+# 2. add x labels into the data frame to tame the x axis
+# 3. use group = 1 to allow for geom_line to work - https://stackoverflow.com/questions/27082601/ggplot2-line-chart-gives-geom-path-each-group-consist-of-only-one-observation
+# 4. Still cannot control how legends works, found a turnaround, but cannot express my own colors and line shapes
+# 4.a COLORS needs to stay inside the aes() otherwise the legend will NOY show up!
+# 4.b the sames goes with the linetype which you can "name" but not select and have to play around
+
+# now that I think about it , maybe the dataframe was not necessary and I could have plotted ts() and forecast data alltogether if only I used the bloody group = 1 inside the aes () from the beninning!!!!!
+
 
 x_axis <- c("01 - Jan", "02 - Feb", "03 - Mar", "04 - Apr", "05 - May", "06 - Jun")
 
-axis(1, at = 1:6, labels = 1:6)# c("Jan", "Feb", "Mar", "Apr", "May", "Jun"))
-
-ggplot () +
-  geom_line(aes (x = x_axis, y = actual_data) , color = "black", stat = "identity") +
-  geom_point(aes (x = x_axis, y = fcst_ets$mean), color = "red") +
-  geom_point(aes (x = x_axis, y = fcst_arima$mean), color = "blue")
+# Conversion of time series and forecast data into a simple data frame with intelligible x axis
+a <- data.frame(x_month = x_axis, act = as.numeric(actual_data), fct_ets = as.numeric(fcst_ets$mean), fct_arima = as.numeric(fcst_arima$mean))
 
 
-autoplot(actuals_2022, geom = "point")
-
-class(actuals_2022)
-class(fcst_arima)
-fcst_arima <- ts (fcst_arima)
-
-autoplot(fcst_arima)
-
-fcst_arima$series
-geom_point(fcst_ets$mean, color = "red")# +
-  geom_point(aes (x = x_axis, y = fcst_arima$mean), color = "blue")#
-
-plot (1:5, xaxt ="n", xlab ="Some Letters")
-axis (1, at =1:5, labels = c("a","b","c","d","e"))
+# plot on ggplot!
+ggplot (data = a, aes (x  = x_month, y = act)) +
+  geom_point(aes (x = x_month, y = act , color = "Actuals")) +
+  geom_line (aes (x = x_month, y = act, group = 1, color = "Actuals", linetype = "Actuals")) + # do not forget the group = 1 parameter for lines
+  
+  geom_point(aes (x = x_month, y = fct_ets, color = "ETS")) +
+  geom_line (aes (x = x_month, y = fct_ets, group = 1 , color = "ETS", linetype = "Forecast")) + # do not forget the group = 1 parameter for lines
+  
+  geom_point(aes (x = x_month, y = fct_arima, color = "ARIMA")) +
+  geom_line (aes (x = x_month, y = fct_arima, group = 1 , color = "ARIMA", linetype = "Forecast")) + # do not forget the group = 1 parameter for lines
+  
+  labs (title = "New Passenger Cars Registrations - Italian Market",
+        subtitle = "Actual 2022 vs Forecast (ETS and ARIMA)",
+        caption ="Elaborated by Alberto Frison on - ACEA data - https://www.acea.auto/") +
+  xlab("Month") +
+  ylab ("Vehicles #") +
+  scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
+                     
