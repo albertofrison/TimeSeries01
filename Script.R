@@ -35,23 +35,68 @@ Y <- window (Y_entire, start = c(2005,1), end = c(2021,12))
 head (Y) # deciding to start in 2005 is completely subjective
 tail (Y) # yes, we leave the remaining 2022 months outside the TRAINING SET to be used to evaluate the correctness of our foreasts
 
+
 #####
-# Section 02 Preliminary Analysis
-# Time Plot
+# Section 02 - Preliminary Analysis
+# Time Plot - using autoplot function
 autoplot (Y) + 
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registrations") +
   xlab ("Year")
-# data looks SEASONAL (to be confirmed) and with a downward TREND
+# data looks both SEASONAL (to be confirmed) and with a downward TREND
+
+# STATIONARITY
+# Testing Stationarity of ts via UNIT ROOTS test and ACF plot
+# By looking at the seires one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
+PP.test(Y) # p-value = 0.01 
+acf(Y) # series does not look stationary to me
 
 
 # DIFFERENCE FUNCTION DATA TO GET RID OF THE TREND
-DY <- diff(Y) # change of registrations from month to month (feb 1990 - jan 1990)
+DY <- diff(Y) # First Difference of the Time Series - DY now contains the month over month changes in the time series
+PP.test(DY)
+acf(DY)
+
 autoplot (DY) + 
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Difference") +
   xlab ("Year")
-# DY now contains the month over month changes in the time series
+
+# BONUS CHAPTER - HOW MANI TIMES YOU NEED TO DIFFERENCIATE?
+# To determine the number of times to difference a time series, we can choose the one that gives the lowest overall variance.
+Y.var <- var(Y)
+
+for(i in 1:3) {
+  diff <- diff(Y, lag=1, differences = i)
+  Y.var[i+1] <- var(diff)
+}
+Y.var <- data.frame(diff=0:3, var=Y.var)
+
+# Plot variance against the number of times data is differenciated 
+plot(Y.var, type="l", ylab="Variance", xlab="d") # in any case the 1-th differenciation has a LOWER variance than Y, so DY is more stationary than Y
+
+
+# BONUS CHAPTER - LEAST SQUARES TREND REMOVAL
+# The least-square trends removal involves fitting a linear model to the time series and subtracting the fitted values from the data points.
+# It is another method to remove Trends.
+
+time <- time(Y)
+fit <- lm (Y ~ time) # fit a linear model
+yt <- fit$fitted.values
+zt <- fit$residuals
+
+
+# Plot time series with superimposed linear model and residuals 
+par(mfrow=c(2,1))
+plot(Y, col="blue", main="Least Square Trend Removal", ylab="Registrations") # Original Time Series
+abline(fit, col="red") # This is the plot of Linear Model
+plot(Y-yt, type="l", col="green", xlab="Time", ylab="Residuals") # Original Time Serise LESS the Trend (the abline)
+par(mfrow=c(1, 1))
+
+# not sure the next 2 lines makes sense
+# Y_removed <- (Y - yt) 
+# var(Y_removed) # lowest var so far
+
 
 # INVESTIGATING SEASONALITY
 # we got rid of the Trend, let's see if there is a monthly seasonality 
@@ -70,6 +115,8 @@ ggsubseriesplot(DY) +
 # CONCLUSION: THE SERIES HAS TREND AND SEASONALITY, WE CAN NOW EXPLORE DIFFERENT WAYS TO FORECAST FOR THE FUTURE
 
 
+
+
 #####
 # Section 03  Let's try to forecast
 # 01. Benchmark Methods - SEASONAL NAIVE METHOD: T_y = T_(y-s) + Random Error
@@ -78,7 +125,7 @@ ggsubseriesplot(DY) +
 fit <- snaive(DY) 
 print(summary(fit))   
 checkresiduals(fit)
-class(fit)
+class(fit) 
 # snaive doesn't look that performs very well, SD is 28k cars and ACF chart suggest lots of autocorrelation
 
 # as alternative to checkresiduals function
