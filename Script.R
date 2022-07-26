@@ -8,19 +8,32 @@
 # and to Scott Burk for the (quite complex) but inspiring YouTube Lectures: https://www.youtube.com/watch?v=HdYBuDMJ40Y&list=PLX-TyAzMwGs-I3i5uiCin37VFMSy4c50F&index=1
 ######################################################
 
+
 ##### 
 # Section 00 Initialization and Load of Packages
 rm (list =ls())   # clears all variables in the workspace
 library (fpp2)    # forecasting package
+library (tidyverse) #we will need to tidy the data - later - for plotting on ggplot the right way
+
 
 
 ##### 
-# Section 01 Load the Data
-data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ";") # Passenger Cars Registrations in Italy from 1990 - Today (updated June 2022)
+# Section 01 - Loading the Data
+# Passenger Cars Registrations in Italy from 1990 - Today (updated June 2022)
+data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ";") 
+class (data) # data.frame
+head (data)
 
-Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,6), frequency = 12) # declare a new variable Y as Time Series (just the second column)
-Y <- window (Y_entire, start = c(2005,1), end = c(2021,12)) # this is the TRAINING SET --- you can play with the start // end of the training set to see what works better
+# declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE data
+Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,6), frequency = 12)
+class (Y_entire) # time series
+head (Y_entire) # this is consistent with the head() of the data.frame only that now is a ts() format
+tail (Y_entire) # it ends where it should - jan to june 2022 - thereore I expect no errors in the ts() definition
 
+# this is the TRAINING SET --- you can play with the start // end of the training set to see what works better to forecast
+Y <- window (Y_entire, start = c(2005,1), end = c(2021,12))
+head (Y) # deciding to start in 2005 is completely subjective
+tail (Y) # yes, we leave the remaining 2022 months outside the TRAINING SET to be used to evaluate the correctness of our foreasts
 
 #####
 # Section 02 Preliminary Analysis
@@ -152,7 +165,7 @@ x_axis <- c("01 - Jan", "02 - Feb", "03 - Mar", "04 - Apr", "05 - May", "06 - Ju
 a <- data.frame(x_month = x_axis, act = as.numeric(actual_data), fct_ets = as.numeric(fcst_ets$mean), fct_arima = as.numeric(fcst_arima$mean))
 
 
-# plot on ggplot!
+# plot on ggplot - method 01 (wrong way)
 ggplot (data = a, aes (x  = x_month, y = act)) +
   geom_point(aes (x = x_month, y = act , color = "Actuals")) +
   geom_line (aes (x = x_month, y = act, group = 1, color = "Actuals", linetype = "Actuals")) + # do not forget the group = 1 parameter for lines
@@ -169,4 +182,15 @@ ggplot (data = a, aes (x  = x_month, y = act)) +
   xlab("Month") +
   ylab ("Vehicles #") +
   scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
-                     
+
+
+# plot on ggplot - method 02 (right way, tidy data)
+# trying to tide data
+b <- a %>%
+      pivot_longer(c("act","fct_ets","fct_arima"), names_to = "type", values_to = "val")
+
+ggplot (data = b, aes (x = x_month, y = val)) +
+  geom_point(aes(color = type)) +
+  geom_line(aes(color = type, linetype = type, group = 1), stat = "identity")
+
+#, group = 1
