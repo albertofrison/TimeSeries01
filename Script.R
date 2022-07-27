@@ -10,11 +10,10 @@
 
 
 ##### 
-# Section 00 Initialization and Load of Packages
+# Section 00 - Initialization and Load of Packages
 rm (list =ls())   # clears all variables in the workspace
 library (fpp2)    # forecasting package
 library (tidyverse) #we will need to tidy the data - later - for plotting on ggplot the right way
-
 
 
 ##### 
@@ -49,7 +48,7 @@ autoplot (Y) +
 # Testing Stationarity of ts via UNIT ROOTS test and ACF plot
 # By looking at the seires one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
 PP.test(Y) # p-value = 0.01 
-acf(Y) # series does not look stationary to me
+Acf(Y) # series does not look stationary to me
 
 
 # DIFFERENCE FUNCTION DATA TO GET RID OF THE TREND
@@ -87,15 +86,15 @@ zt <- fit$residuals
 
 
 # Plot time series with superimposed linear model and residuals 
-par(mfrow=c(2,1))
+par(mfrow=c(2,1)) # 2 rows by 1 column
 plot(Y, col="blue", main="Least Square Trend Removal", ylab="Registrations") # Original Time Series
 abline(fit, col="red") # This is the plot of Linear Model
-plot(Y-yt, type="l", col="green", xlab="Time", ylab="Residuals") # Original Time Serise LESS the Trend (the abline)
-par(mfrow=c(1, 1))
+plot(Y-yt, type="l", col="green", xlab="Time", ylab="Residuals") # Original Time Series LESS the Trend (the abline)
+par(mfrow=c(1, 1)) # resets to graphical pararemeter to 1 row by 1 column
 
 # not sure the next 2 lines makes sense
 # Y_removed <- (Y - yt) 
-# var(Y_removed) # lowest var so far
+# var(Y_removed) # lowest variance so far
 
 
 # INVESTIGATING SEASONALITY
@@ -111,14 +110,71 @@ ggseasonplot (DY) +
 ggsubseriesplot(DY) +
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Seasonality")
-
 # CONCLUSION: THE SERIES HAS TREND AND SEASONALITY, WE CAN NOW EXPLORE DIFFERENT WAYS TO FORECAST FOR THE FUTURE
 
+# HOW TO GET RID OF SEASONALITY ? 
+# 1. SEASONAL DIFFERENCING 
+# Seasonal differencing aims to subtract each data point by a previous data point of a fixed lag i.e. 12
+seasonal_diff_Y <- diff (Y, lag = 12, differences = 1) # calculates the differenced ts with a 12 month lag
 
+# check the results
+par (mfrow = c(2,2)) # two rows by two columns
+plot (Y, main = "New Car Registrations", ylab = "Registrations")
+Acf (Y, main = "ACF", ylab = "ACF")
+plot (seasonal_diff_Y, main = "Differenciated Data - Lag 12", ylab = "Registrations")
+Acf (seasonal_diff_Y, main = "ACF", ylab = "ACF")
+par (mfrow = c(1,1)) # graphical parameters reset
+
+
+# 2. SEASONAL MEANS
+# Seasonal means aims to subtract each data point by its respective group average, the monthly average
+# Y goes from 2005 to 2021 included
+seasonal_mean_Y <- data.frame (
+  year = rep (2005:2021, each = 12),
+  month = rep (1:12),
+  value = Y) # prepare a dataframe to be used to calculate the MONTHLY AVERAGE in the next line of code
+
+seasonal_mean_Y_xbars <- aggregate (value ~ month, data = seasonal_mean_Y, mean) # aggregate values by month, of the dataframe hence created using the mean as formula
+seasonal_mean_Ydiff <- Y - seasonal_mean_Y_xbars$value # store into a variable the difference of each data point versus the monthly average
+
+# check the results
+par (mfrow = c(2,2)) # two rows by two columns
+plot (Y, main = "New Car Registrations", ylab = "Registrations")
+Acf (Y, main = "ACF", ylab = "ACF")
+plot (seasonal_mean_Ydiff, main = "Differenciated Data - Monthly Average", ylab = "Registrations")
+Acf (seasonal_mean_Ydiff, main = "ACF", ylab = "ACF") # doesn't look good
+par (mfrow = c(1,1)) # graphical parameters reset
+
+
+# 3. METHOD OF THE MOVING AVERAGES - DECOMPOSING A TIME SERIES 
+decomposed_Y <- decompose (Y) # decomposes the ts into DATA (observed), the Trend, the Seasonal effect an the Random (noise) effects
+plot(decomposed_Y) 
+
+trend_Y <- decomposed_Y$trend
+seasonal_Y <- decomposed_Y$seasonal
+random_Y <- decomposed_Y$random
+
+# check the results
+plot (Y, ylab ="", main = "Composition of the Time Series", col = "grey", lty = 2)
+lines (trend_Y, col = "red")
+lines (seasonal_Y + trend_Y , col = "blue")
+legend ("topright", legend = c ("Data", "Trend", "Seasonal + Trend"), col = c("grey", "red", "blue"), lty = 1)
 
 
 #####
-# Section 03  Let's try to forecast
+# Section 03A - Let's try to forecast by fitting and ARIMA model and using manual parameters through ACF and PACF interpretation
+# Arima (p,d,q) is composed of 3 hyperparameters:
+# p = Autoregression (AR)
+# d = Differencing (I)
+# q = Moving Average (MA)
+m <- matrix(c(1,1,2,3),2,2,byrow = TRUE)
+layout(m)
+plot (Y, main= "", ylab ="")
+Acf(Y,main="")
+Pacf(Y,main="")
+
+#####
+# Section 03B  Let's try to forecast
 # 01. Benchmark Methods - SEASONAL NAIVE METHOD: T_y = T_(y-s) + Random Error
 # Remember to use the DIFFERENCE DATA and not the RAW DATA due to the TREND
 
