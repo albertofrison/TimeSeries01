@@ -27,7 +27,7 @@ head (data)
 Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,6), frequency = 12)
 class (Y_entire) # time series
 head (Y_entire) # this is consistent with the head() of the data.frame only that now is a ts() format
-tail (Y_entire) # it ends where it should - jan to june 2022 - thereore I expect no errors in the ts() definition
+tail (Y_entire) # it ends where it should - jan to june 2022 - therefore I expect no errors in the ts() definition
 
 # this is the TRAINING SET --- you can play with the start // end of the training set to see what works better to forecast
 Y <- window (Y_entire, start = c(2005,1), end = c(2021,12))
@@ -38,6 +38,7 @@ tail (Y) # yes, we leave the remaining 2022 months outside the TRAINING SET to b
 #####
 # Section 02 - Preliminary Analysis
 # Time Plot - using autoplot function
+par (mfrow = c(1,1))
 autoplot (Y) + 
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registrations") +
@@ -49,12 +50,12 @@ autoplot (Y) +
 # By looking at the seires one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
 PP.test(Y) # p-value = 0.01 
 Acf(Y) # series does not look stationary to me
-
+Pacf(Y)
 
 # DIFFERENCE FUNCTION DATA TO GET RID OF THE TREND
 DY <- diff(Y) # First Difference of the Time Series - DY now contains the month over month changes in the time series
 PP.test(DY)
-acf(DY)
+Acf(DY)
 
 autoplot (DY) + 
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
@@ -65,14 +66,21 @@ autoplot (DY) +
 # To determine the number of times to difference a time series, we can choose the one that gives the lowest overall variance.
 Y.var <- var(Y)
 
-for(i in 1:3) {
+for(i in 1:10) {
   diff <- diff(Y, lag=1, differences = i)
   Y.var[i+1] <- var(diff)
 }
-Y.var <- data.frame(diff=0:3, var=Y.var)
+Y.var <- data.frame(diff=0:10, var=Y.var)
 
 # Plot variance against the number of times data is differenciated 
 plot(Y.var, type="l", ylab="Variance", xlab="d") # in any case the 1-th differenciation has a LOWER variance than Y, so DY is more stationary than Y
+which(Y.var$var == min(Y.var$var))
+Y.var[which(Y.var$var == min(Y.var$var)),]$diff # one differenciation
+
+# In Diff_methods I save, I store, the value of the variance of the data obtained by the various Difference Methods
+Diff_methods <- matrix(nrow = 3, ncol = 2)
+Diff_methods[1,1] <- "1 LAG"
+Diff_methods[1,2] <- Y.var[2,]$var
 
 
 # BONUS CHAPTER - LEAST SQUARES TREND REMOVAL
@@ -125,6 +133,8 @@ plot (seasonal_diff_Y, main = "Differenciated Data - Lag 12", ylab = "Registrati
 Acf (seasonal_diff_Y, main = "ACF", ylab = "ACF")
 par (mfrow = c(1,1)) # graphical parameters reset
 
+Diff_methods[2,1] <- "SEASONAL DIFFERENCING"
+Diff_methods[2,2] <- var (seasonal_diff_Y)
 
 # 2. SEASONAL MEANS
 # Seasonal means aims to subtract each data point by its respective group average, the monthly average
@@ -145,6 +155,8 @@ plot (seasonal_mean_Ydiff, main = "Differenciated Data - Monthly Average", ylab 
 Acf (seasonal_mean_Ydiff, main = "ACF", ylab = "ACF") # doesn't look good
 par (mfrow = c(1,1)) # graphical parameters reset
 
+Diff_methods[3,1] <- "SEASONAL MEANS"
+Diff_methods[3,2] <- var (seasonal_mean_Ydiff)
 
 # 3. METHOD OF THE MOVING AVERAGES - DECOMPOSING A TIME SERIES 
 decomposed_Y <- decompose (Y) # decomposes the ts into DATA (observed), the Trend, the Seasonal effect an the Random (noise) effects
@@ -170,8 +182,21 @@ legend ("topright", legend = c ("Data", "Trend", "Seasonal + Trend"), col = c("g
 m <- matrix(c(1,1,2,3),2,2,byrow = TRUE)
 layout(m)
 plot (Y, main= "", ylab ="")
+abline(a = mean(Y), b =0, lty = 3, col = "blue") #mean
+abline(a = mean(Y) + sd(Y), b =0, lty = 4, col = "red") #mean +sd
+abline(a = mean(Y) - sd(Y), b =0, lty = 4, col = "red") #mean +sd
 Acf(Y,main="")
 Pacf(Y,main="")
+
+# let's fit a potential arima model and see how it performs
+fit_arima <- arima(Y, order = c(1,1,1))
+print(summary(fit_arima)) # here you check errors Mean Error, RMSE, Mean Percentage Error, and so on
+checkresiduals(fit_arima) # here you check residuals chart, acf and distribution
+
+# let's see Lijung-Box Test, or 
+Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) # from my understainding the model is NOT a good fit for the data as the p-value is very small
+
+
 
 #####
 # Section 03B  Let's try to forecast
@@ -202,7 +227,7 @@ checkresiduals(fit_ets)
 #-----------------
 # 03. ARIMA
 # Data in ARIMA needs to be STATIONARY: use the Diff data and tell there ise
-fit_arima <- auto.arima (Y,d=1, D=1, stepwise = FALSE, approximation = FALSE, trace = TRUE) #we can use the original Y data, using the d=1 parameter
+fit_arima <- auto.arima (Y, d=1, D=1, stepwise = FALSE, approximation = FALSE, trace = TRUE) #we can use the original Y data, using the d=1 parameter
 print(summary(fit_arima))   # Residual SD 21293.75 #warning ARIMA returns VARIANCE ==> SD^2  // 21161.46 (1990 - 2020)
 checkresiduals(fit_arima)
 #-----------------
