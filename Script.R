@@ -1,11 +1,12 @@
 ######################################################
-# This files analyzes monthly Passengers Car Registrations Data as Time Series
+# This files analyzes monthly Passengers Car Registrations Data as Time Series and makes a general review on time series tools
 # 
-# Source: https://www.acea.auto/figure/passenger-car-registrations-in-europe-since-1990-by-country/
+# Data Source: https://www.acea.auto/figure/passenger-car-registrations-in-europe-since-1990-by-country/
 #
 # Created with ♥ by Alberto Frison - July 2022
 # Thanks to Adam Check for the great YouTube videos: https://www.youtube.com/watch?v=dBNy_A6Zpcc
 # and to Scott Burk for the (quite complex) but inspiring YouTube Lectures: https://www.youtube.com/watch?v=HdYBuDMJ40Y&list=PLX-TyAzMwGs-I3i5uiCin37VFMSy4c50F&index=1
+# and to this article - https://towardsdatascience.com/beginners-introduction-to-time-series-analysis-and-forecasting-c2c2918603d9
 ######################################################
 
 
@@ -14,6 +15,7 @@
 rm (list =ls())   # clears all variables in the workspace
 library (fpp2)    # forecasting package
 library (tidyverse) #we will need to tidy the data - later - for plotting on ggplot the right way
+
 
 
 ##### 
@@ -45,7 +47,7 @@ autoplot (Y) +
   xlab ("Year")
 # data looks both SEASONAL (to be confirmed) and with a downward TREND
 
-# STATIONARITY
+# 02 A. STATIONARITY
 # Testing Stationarity of ts via UNIT ROOTS test and ACF plot
 # By looking at the seires one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
 PP.test(Y) # p-value = 0.01 
@@ -62,7 +64,7 @@ autoplot (DY) +
   ylab ("Registration - Month over Month Difference") +
   xlab ("Year")
 
-# BONUS CHAPTER - HOW MANI TIMES YOU NEED TO DIFFERENCIATE?
+# 02 B. BONUS CHAPTER - HOW MANI TIMES YOU NEED TO DIFFERENCIATE?
 # To determine the number of times to difference a time series, we can choose the one that gives the lowest overall variance.
 Y.var <- var(Y)
 
@@ -83,7 +85,7 @@ Diff_methods[1,1] <- "1 LAG"
 Diff_methods[1,2] <- Y.var[2,]$var
 
 
-# BONUS CHAPTER - LEAST SQUARES TREND REMOVAL
+# 02 C. BONUS CHAPTER - LEAST SQUARES TREND REMOVAL
 # The least-square trends removal involves fitting a linear model to the time series and subtracting the fitted values from the data points.
 # It is another method to remove Trends.
 
@@ -105,9 +107,7 @@ par(mfrow=c(1, 1)) # resets to graphical pararemeter to 1 row by 1 column
 # var(Y_removed) # lowest variance so far
 
 
-# INVESTIGATING SEASONALITY
-# we got rid of the Trend, let's see if there is a monthly seasonality 
-
+# 02 D. INVESTIGATING SEASONALITY
 # ONE WAY TO LOOK AT SEASONALITY
 ggseasonplot (DY) +
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
@@ -188,17 +188,54 @@ abline(a = mean(Y) - sd(Y), b =0, lty = 4, col = "red") #mean +sd
 Acf(Y,main="")
 Pacf(Y,main="")
 
-# let's fit a potential arima model and see how it performs
-fit_arima <- arima(Y, order = c(1,1,1))
+# let's fit a potential arima model and see how it performs - since so far I undestood ZERO on how to interpret ACF and PACF to instruct a model
+# let's just take the hyperparamenters calculated automatically by the auto.arima function below
+fit_arima <- arima(Y, order = c(1,1,1), seasonal = c(0,1,1)) # ARIMA(1,1,1)(0,1,1)[12]
+
+# Techniques to check the FIT of a Model
+# a.look at the ERRORS TABLE (ME,MAE, RMSE, ....) and the VARIANCE # 474.104.865
 print(summary(fit_arima)) # here you check errors Mean Error, RMSE, Mean Percentage Error, and so on
-checkresiduals(fit_arima) # here you check residuals chart, acf and distribution
 
-# let's see Lijung-Box Test, or 
-Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) # from my understainding the model is NOT a good fit for the data as the p-value is very small
+# b. Graph of Residuals - checking their MEAN (that should be ZERO) and how VARIANCE changes over time STABLE VARIANCE
+# here you check residuals chart, acf and distribution - ACF on the residuals should be SMALL and demonstrate NO significant patterns and 
+# in order to conclude that the RESISUALS are independent
+checkresiduals(fit_arima)  # yes, except LAG-13 where there is a significant plot
+mean(fit_arima$residuals) # this is he MEAN ERROR, the first error type (ME) returned by summary(fit_arima)
+
+# c. let's see Lijung-Box Test
+# this test is a statistical test that measure whether or not a group of auto-correlations in a time series are different from ZERO
+# if the p-value of the test is GREATED than 0.05 (5%) then we do NOT reject the null hypotheses and conclude that the model is a good fit
+Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) #p-value = 0.185 > 5% so the model is a good fit for the data
 
 
+# d. AKAIKE INFORMATION CRITERION (AIC) or, a measure of the trade-between the goodness of the fit of the model and the number of parameters in the model
+# it is a way to try to avoid OVERFITTING: many parameters might provide a good fit for the data, but not generate a good PREDICTOR of the future - in the
+# other hand a model with few parameters might not be sufficient to capture the patterns in the data.
+# Steps: 
+#   1. we have determined that the Y ts should be differenciated ONCE to get rid of the trend and to yield the lowest variance so ARIMA (p,d=1,q)
+#   this is also confirmed by the auto.arima d = 1 parameter here above
+#   2. we establish an ARIMA (p,1,q) model and cycle over for loops to identity which p,q combination yields the lower AIC
 
-#####
+aic_result <- numeric (4) # 
+
+for (p in 0:2) {
+  for (d in 0:2) {
+    for (q in 0:2) {
+      aic <- arima (Y, order = c(p,d,q), seasonal = c(0,1,1))$aic
+      aic_result <- rbind(aic_result, c(p,d, q,aic))
+    }
+  }
+}
+
+aic_result <- aic_result [-1,]
+colnames (aic_result) <- c("p","d","q", "AIC")
+aic_result
+min(aic_result[,4]) #4371.436 order = c(1,2,2)
+
+# only now I realized that the auto.arima model I used was forcing d = 1, yielding a less efficient result.
+# let's re.run hoping to see that the auto.arima will yield indeed a order c (1,2,2) model
+
+  #####
 # Section 03B  Let's try to forecast
 # 01. Benchmark Methods - SEASONAL NAIVE METHOD: T_y = T_(y-s) + Random Error
 # Remember to use the DIFFERENCE DATA and not the RAW DATA due to the TREND
@@ -230,6 +267,11 @@ checkresiduals(fit_ets)
 fit_arima <- auto.arima (Y, d=1, D=1, stepwise = FALSE, approximation = FALSE, trace = TRUE) #we can use the original Y data, using the d=1 parameter
 print(summary(fit_arima))   # Residual SD 21293.75 #warning ARIMA returns VARIANCE ==> SD^2  // 21161.46 (1990 - 2020)
 checkresiduals(fit_arima)
+
+fit_arima_new <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE, ic = "aic") #we can use the original Y data, using the d=1 parameter
+
+?auto.arima
+
 #-----------------
 
 
