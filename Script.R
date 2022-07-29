@@ -212,9 +212,8 @@ Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) #p-value = 0.185 > 
 # it is a way to try to avoid OVERFITTING: many parameters might provide a good fit for the data, but not generate a good PREDICTOR of the future - in the
 # other hand a model with few parameters might not be sufficient to capture the patterns in the data.
 # Steps: 
-#   1. we have determined that the Y ts should be differenciated ONCE to get rid of the trend and to yield the lowest variance so ARIMA (p,d=1,q)
-#   this is also confirmed by the auto.arima d = 1 parameter here above
-#   2. we establish an ARIMA (p,1,q) model and cycle over for loops to identity which p,q combination yields the lower AIC
+#   1. we establish an ARIMA (p,d,q) model and cycle over for loops to identity which p,q combination yields the lower AIC
+#   2. we loop over p,d,q parameters to look for the best (lowest) AIC
 
 aic_result <- numeric (4) # 
 
@@ -232,14 +231,15 @@ colnames (aic_result) <- c("p","d","q", "AIC")
 aic_result
 min(aic_result[,4]) #4371.436 order = c(1,2,2)
 
-# only now I realized that the auto.arima model I used was forcing d = 1, yielding a less efficient result.
-# let's re.run hoping to see that the auto.arima will yield indeed a order c (1,2,2) model
+# looking at the model fit here below the best ARIMA model is Best model: ARIMA(2,0,1)(0,1,1)[12]
+# fit_arima <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE)
+# I am not sure why my AIC reports a different result := here the LOWEST AIC is at 4.371.436 order = c(1,2,2)
+
 
   #####
 # Section 03B  Let's try to forecast
 # 01. Benchmark Methods - SEASONAL NAIVE METHOD: T_y = T_(y-s) + Random Error
 # Remember to use the DIFFERENCE DATA and not the RAW DATA due to the TREND
-
 fit <- snaive(DY) 
 print(summary(fit))   
 checkresiduals(fit)
@@ -253,6 +253,7 @@ hist(res, nclass= "FD", main ="Histogram of Residuals - Naive Method")
 
 
 
+
 #-----------------
 # 02. Exponential Smoothing Model 
 # We can use REGULAR RAW DATA
@@ -261,20 +262,19 @@ print(summary(fit_ets))
 checkresiduals(fit_ets)
 
 
+
+
 #-----------------
 # 03. ARIMA
-# Data in ARIMA needs to be STATIONARY: use the Diff data and tell there ise
-fit_arima <- auto.arima (Y, d=1, D=1, stepwise = FALSE, approximation = FALSE, trace = TRUE) #we can use the original Y data, using the d=1 parameter
+# Data in ARIMA needs to be STATIONARY: use the Diff data and tell there is
+fit_arima <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE)
 print(summary(fit_arima))   # Residual SD 21293.75 #warning ARIMA returns VARIANCE ==> SD^2  // 21161.46 (1990 - 2020)
 checkresiduals(fit_arima)
 
-fit_arima_new <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE, ic = "aic") #we can use the original Y data, using the d=1 parameter
 
-?auto.arima
+
 
 #-----------------
-
-
 #####
 # Section 04 LET's FORECAST
 
@@ -307,6 +307,7 @@ autoplot(fcst_arima)
 
 
 # PLOTTING 
+par (mfrow = c(1,1)) 
 plot (actual_data, ylim = c (80000,150000), main ="Italian Market - New Car Registrations - Forecast")
 points(actual_data, col = "black", pch = 19)
 lines(fcst_ets$mean, lty= "solid", col = "red")
@@ -354,7 +355,7 @@ ggplot (data = a, aes (x  = x_month, y = act)) +
   scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
 
 
-# plot on ggplot - method 02 (right way, tidy data)
+# plot on ggplot - method 02 (right way, tidy data) # UNDER COSTRUCTION
 # trying to tide data
 b <- a %>%
       pivot_longer(c("act","fct_ets","fct_arima"), names_to = "type", values_to = "val")
@@ -363,4 +364,3 @@ ggplot (data = b, aes (x = x_month, y = val)) +
   geom_point(aes(color = type)) +
   geom_line(aes(color = type, linetype = type, group = 1), stat = "identity")
 
-#, group = 1
