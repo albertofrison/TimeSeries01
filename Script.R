@@ -1,7 +1,6 @@
 ######################################################
 # This files analyzes monthly Passengers Car Registrations Data as Time Series and makes a general review on time series tools
-# 
-# Data Source: https://www.acea.auto/figure/passenger-car-registrations-in-europe-since-1990-by-country/
+# # Data Source: https://www.acea.auto/figure/passenger-car-registrations-in-europe-since-1990-by-country/
 #
 # Created with ♥ by Alberto Frison - July 2022
 # Thanks to Adam Check for the great YouTube videos: https://www.youtube.com/watch?v=dBNy_A6Zpcc
@@ -25,8 +24,8 @@ data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ";")
 class (data) # data.frame
 head (data)
 
-# declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE data
-Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,6), frequency = 12)
+# declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE 
+Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,8), frequency = 12) # remember to check the ending month at each update
 class (Y_entire) # time series
 head (Y_entire) # this is consistent with the head() of the data.frame only that now is a ts() format
 tail (Y_entire) # it ends where it should - jan to june 2022 - therefore I expect no errors in the ts() definition
@@ -283,14 +282,14 @@ checkresiduals(fit_arima)
 #plot(fcst_snv)
 
 # ETS Forecast
-fcst_ets <- forecast(fit_ets,h=6)
+fcst_ets <- forecast(fit_ets,h=8) # remember to change the number of months (8 for Jan to Aug)
 
 # ARIMA Forecast
-fcst_arima <- forecast(fit_arima,h=6)
+fcst_arima <- forecast(fit_arima,h=8)
 
 
 #####
-# Check Forecasts against Actuals - Six Months of Data 2022 up to June
+# Check Forecasts against Actuals
 actual_data <- window (Y_entire, start = c(2022,1))
 
 # SNAIVE METHOD
@@ -308,13 +307,13 @@ autoplot(fcst_arima)
 
 # PLOTTING 
 par (mfrow = c(1,1)) 
-plot (actual_data, ylim = c (80000,150000), main ="Italian Market - New Car Registrations - Forecast")
+plot (actual_data, ylim = c (60000,150000), main ="Italian Market - New Car Registrations - Forecast")
 points(actual_data, col = "black", pch = 19)
 lines(fcst_ets$mean, lty= "solid", col = "red")
 points(fcst_ets$mean, col = "red")
 lines(fcst_arima$mean, lty="solid", col = "blue")
 points(fcst_arima$mean, col = "blue")
-legend ("bottomright", legend = c("2022 - Actuals", "ETS Method Forecast", "ARIMA Forecast"), lty = "solid", col = c("black","red", "blue"))
+legend ("bottomleft", legend = c("2022 - Actuals", "ETS Method Forecast", "ARIMA Forecast"), lty = "solid", col = c("black","red", "blue"))
 
 
 #####
@@ -330,7 +329,7 @@ legend ("bottomright", legend = c("2022 - Actuals", "ETS Method Forecast", "ARIM
 # now that I think about it , maybe the dataframe was not necessary and I could have plotted ts() and forecast data alltogether if only I used the bloody group = 1 inside the aes () from the beninning!!!!!
 
 
-x_axis <- c("01 - Jan", "02 - Feb", "03 - Mar", "04 - Apr", "05 - May", "06 - Jun")
+x_axis <- c("01", "02", "03", "04", "05", "06", "07", "08")
 
 # Conversion of time series and forecast data into a simple data frame with intelligible x axis
 a <- data.frame(x_month = x_axis, act = as.numeric(actual_data), fct_ets = as.numeric(fcst_ets$mean), fct_arima = as.numeric(fcst_arima$mean))
@@ -355,12 +354,17 @@ ggplot (data = a, aes (x  = x_month, y = act)) +
   scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
 
 
-# plot on ggplot - method 02 (right way, tidy data) # UNDER COSTRUCTION
+# plot on ggplot - method 02 (right way, tidy data) 
 # trying to tide data
 b <- a %>%
       pivot_longer(c("act","fct_ets","fct_arima"), names_to = "type", values_to = "val")
 
-ggplot (data = b, aes (x = x_month, y = val)) +
-  geom_point(aes(color = type)) +
-  geom_line(aes(color = type, linetype = type, group = 1), stat = "identity")
-
+ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group = type)) +
+  geom_point() +
+  geom_line() +
+  labs (title = "Year 2022 Passengers' Cars Registration in Italy",
+        subtitle = "Actual Values VS Arima, ETS Forecast Methods",
+        caption = "Made with ♥ by Alberto Frison - https://github.com/albertofrison/TimeSeries01") +
+  xlab("Month") +
+  ylab("Registrations #units")+
+  scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
