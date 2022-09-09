@@ -23,6 +23,7 @@ library (tidyverse) #we will need to tidy the data - later - for plotting on ggp
 data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ";") 
 class (data) # data.frame
 head (data)
+tail (data)
 
 # declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE 
 Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,8), frequency = 12) # remember to check the ending month at each update
@@ -300,7 +301,8 @@ actual_data <- window (Y_entire, start = c(2022,1))
 accuracy (fcst_ets,actual_data) # 
 autoplot(fcst_ets)
 
-# ARIMA METHOD
+?accuracy
+# ARIMA ETHOD
 accuracy (fcst_arima,actual_data) # 
 autoplot(fcst_arima)
 
@@ -368,3 +370,7 @@ ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group 
   xlab("Month") +
   ylab("Registrations #units")+
   scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
+
+# Saving (last chart) to file // Remember: 1 inch = 96 pixels
+ggsave (filename = "charts/Chart01_Actual_vs_Forecasts_2022.png", device = "png", dpi = "retina", height = 1018/96, width = 1920/96)
+
