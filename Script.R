@@ -14,25 +14,66 @@
 rm (list =ls())   # clears all variables in the workspace
 library (fpp2)    # forecasting package
 library (tidyverse) #we will need to tidy the data - later - for plotting on ggplot the right way
-
+library (tseries) #used for some tests
 
 
 ##### 
 # Section 01 - Loading the Data
-# Passenger Cars Registrations in Italy from 1990 - Today (updated June 2022)
+# Passenger Cars Registrations in Italy from 1990 - Today (refer to ACEA or DataForce websites to update the enclosed .csv)
 data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ";") 
-class (data) # data.frame
-head (data)
-tail (data)
+#class (data) # data.frame
+#head (data)
+#tail (data)
 
+# Section 01a - Subdstituting 2 outliers in data due to COVID with monthly averages
+# Unfortunately March and April 2020 shows two outliers, I chose to deal with them by substituting to them the mean of these months of the previous years
+# Note, I will also add May as by looking at RESIDUALS, while checking the forecast fit, it seems that even May 2020 is too extreme
+
+# Let's create a new dimension to store the month name (01 for January) so we can calculate monthly averages
+
+# I add here the Month_Name column to identify each month of the series
+data <- data %>%
+  mutate (Month_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%m"),
+          Year_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%Y"))
+
+# DO NOT DELETE ME - working with dates is always a HELL
+# in the as.Date function use TRYFORMATS to tell in which format the date is, then extract the YEAR (for instance) using the %Y in format()
+# format(as.Date("01/04/2020",tryFormats = "%d/%m/%Y"),"%Y")
+
+# Let's graphically see these outliers
+data %>%
+  ggplot() +
+  geom_boxplot(aes(x=Month_Name, y= Registrations))
+
+# Reason that 2022 registrations are difficult to forecast as the market is performing very badly in respect to the past years
+data %>%
+  ggplot() +
+  geom_boxplot(aes(x=Year_Name, y= Registrations))
+
+# Now I filter out the two "wrong" months and I calculate, visually, the averages
+data %>%
+  filter (Month != c("01/03/2020", "01/04/2020", "01/05/2020")) %>%
+  group_by (Month_Name) %>%
+  summarize (Mean = mean(Registrations))
+
+# Finally I substitute the averages into the "actual" data
+data[which(data[,1]=="01/03/2020"),2] <- 207674
+data[which(data[,1]=="01/04/2020"),2] <- 177806
+data[which(data[,1]=="01/05/2020"),2] <- 185555
+# ... now if you run the boxplot chart here above the outliers have disappeared...
+
+
+# DECLARING THE TIMESERIES
 # declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE 
 Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,8), frequency = 12) # remember to check the ending month at each update
 class (Y_entire) # time series
 head (Y_entire) # this is consistent with the head() of the data.frame only that now is a ts() format
 tail (Y_entire) # it ends where it should - jan to june 2022 - therefore I expect no errors in the ts() definition
 
+
+# SELECTING THE TRAINING SET
 # this is the TRAINING SET --- you can play with the start // end of the training set to see what works better to forecast
-Y <- window (Y_entire, start = c(2005,1), end = c(2021,12))
+Y <- window (Y_entire, start = c(2011,1), end = c(2020,12))
 head (Y) # deciding to start in 2005 is completely subjective
 tail (Y) # yes, we leave the remaining 2022 months outside the TRAINING SET to be used to evaluate the correctness of our foreasts
 
@@ -49,8 +90,14 @@ autoplot (Y) +
 
 # 02 A. STATIONARITY
 # Testing Stationarity of ts via UNIT ROOTS test and ACF plot
-# By looking at the seires one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
-PP.test(Y) # p-value = 0.01 
+# By looking at the series one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
+PP.test(Y) # p-value = 0.01 --> the serie is stationary
+
+# in alternative, we ca use the AUgmented Dickey-Fuller Test
+# H0: the series has UNIT ROOT (non-statiornary)
+# H1: the series is stationary
+adf.test(Y) # p-value = 0.01 --> again, the serie is stationary
+
 Acf(Y) # series does not look stationary to me
 Pacf(Y)
 
@@ -109,13 +156,13 @@ par(mfrow=c(1, 1)) # resets to graphical pararemeter to 1 row by 1 column
 
 # 02 D. INVESTIGATING SEASONALITY
 # ONE WAY TO LOOK AT SEASONALITY
-ggseasonplot (DY) +
+ggseasonplot (Y) +
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Difference")
 # there is a clear seasonality in the data with increase of sales in January, as well as March, June and September and a decrease in August
 
 # SECOND WAY TO EXPLORE SEASONALITY
-ggsubseriesplot(DY) +
+ggsubseriesplot(Y) +
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Seasonality")
 # CONCLUSION: THE SERIES HAS TREND AND SEASONALITY, WE CAN NOW EXPLORE DIFFERENT WAYS TO FORECAST FOR THE FUTURE
@@ -190,10 +237,10 @@ Pacf(Y,main="")
 
 # let's fit a potential arima model and see how it performs - since so far I undestood ZERO on how to interpret ACF and PACF to instruct a model
 # let's just take the hyperparamenters calculated automatically by the auto.arima function below
-fit_arima <- arima(Y, order = c(1,1,1), seasonal = c(0,1,1)) # ARIMA(1,1,1)(0,1,1)[12]
+fit_arima <- arima(Y, order = c(1,0,0), seasonal = c(2,1,1), include.mean = TRUE) # ARIMA(1,0,0)(2,1,1)[2] with drift
 
 # Techniques to check the FIT of a Model
-# a.look at the ERRORS TABLE (ME,MAE, RMSE, ....) and the VARIANCE # 474.104.865
+# a.look at the ERRORS TABLE (ME,MAE, RMSE, ....) and the VARIANCE # 443.412.708
 print(summary(fit_arima)) # here you check errors Mean Error, RMSE, Mean Percentage Error, and so on
 
 # b. Graph of Residuals - checking their MEAN (that should be ZERO) and how VARIANCE changes over time STABLE VARIANCE
@@ -205,7 +252,7 @@ mean(fit_arima$residuals) # this is he MEAN ERROR, the first error type (ME) ret
 # c. let's see Lijung-Box Test
 # this test is a statistical test that measure whether or not a group of auto-correlations in a time series are different from ZERO
 # if the p-value of the test is GREATED than 0.05 (5%) then we do NOT reject the null hypotheses and conclude that the model is a good fit
-Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) #p-value = 0.185 > 5% so the model is a good fit for the data
+Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) #p-value = 0.9686 > 5% so the model is a good fit for the data
 
 
 # d. AKAIKE INFORMATION CRITERION (AIC) or, a measure of the trade-between the goodness of the fit of the model and the number of parameters in the model
@@ -220,8 +267,8 @@ aic_result <- numeric (4) #
 for (p in 0:2) {
   for (d in 0:2) {
     for (q in 0:2) {
-      aic <- arima (Y, order = c(p,d,q), seasonal = c(0,1,1))$aic
-      aic_result <- rbind(aic_result, c(p,d, q,aic))
+      aic <- arima (Y, order = c(p,d,q), seasonal = c(2,1,1), include.drift = TRUE)$aic  
+      aic_result <- rbind(aic_result, c(p,d,q,aic))
     }
   }
 }
@@ -229,9 +276,9 @@ for (p in 0:2) {
 aic_result <- aic_result [-1,]
 colnames (aic_result) <- c("p","d","q", "AIC")
 aic_result
-min(aic_result[,4]) #4371.436 order = c(1,2,2)
+min(aic_result[,4]) #4095.542 order = c(1,2,2)
 
-# looking at the model fit here below the best ARIMA model is Best model: ARIMA(2,0,1)(0,1,1)[12]
+# looking at the model fit here below the best ARIMA model is Best model: # ARIMA(1,0,0)(2,1,1)[2] with drift
 # fit_arima <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE)
 # I am not sure why my AIC reports a different result := here the LOWEST AIC is at 4.371.436 order = c(1,2,2)
 
@@ -266,12 +313,18 @@ checkresiduals(fit_ets)
 
 #-----------------
 # 03. ARIMA
-# Data in ARIMA needs to be STATIONARY: use the Diff data and tell there is
+# Auto.arima automatically fits the best model with differing (p,d,q) coordinates - then the BEST model is the one with the LOWEST BIC (Bayesian Info Criterion)
 fit_arima <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE)
-print(summary(fit_arima))   # Residual SD 21293.75 #warning ARIMA returns VARIANCE ==> SD^2  // 21161.46 (1990 - 2020)
+# TRAINING SET 2005 - 2020 WITH March, April and May 2020= mean() --> Best Model --> ARIMA(1,0,1)(0,1,2)[12] 
+# TRAINING SET 2011 - 2020 WITH March, April and May 2020= mean() --> Best Model --> ARIMA(0,1,1)(0,1,2)[12] 
+
+print(summary(fit_arima))
+sqrt (fit_arima$sigma2) # This is the STD DEV of the Model, a measure of accuracy
+# TRAINING SET 2011 - 2020 WITH March, April and May 2020= mean() --> SD = 10741.9
+
+# (Old comment) Residual SD 21293.75 #warning ARIMA returns VARIANCE ==> SD^2  // 21161.46 (1990 - 2020)
+
 checkresiduals(fit_arima)
-
-
 
 
 #-----------------
@@ -283,15 +336,15 @@ checkresiduals(fit_arima)
 #plot(fcst_snv)
 
 # ETS Forecast
-fcst_ets <- forecast(fit_ets,h=8) # remember to change the number of months (8 for Jan to Aug)
+fcst_ets <- forecast(fit_ets,h=20) # remember to change the number of months (8 for Jan to Aug)
 
 # ARIMA Forecast
-fcst_arima <- forecast(fit_arima,h=8)
+fcst_arima <- forecast(fit_arima,h=20)
 
 
 #####
 # Check Forecasts against Actuals
-actual_data <- window (Y_entire, start = c(2022,1))
+actual_data <- window (Y_entire, start = c(2021,1))
 
 # SNAIVE METHOD
 #accuracy (fcst_snv,actual_data)
@@ -301,7 +354,6 @@ actual_data <- window (Y_entire, start = c(2022,1))
 accuracy (fcst_ets,actual_data) # 
 autoplot(fcst_ets)
 
-?accuracy
 # ARIMA ETHOD
 accuracy (fcst_arima,actual_data) # 
 autoplot(fcst_arima)
@@ -331,7 +383,8 @@ legend ("bottomleft", legend = c("2022 - Actuals", "ETS Method Forecast", "ARIMA
 # now that I think about it , maybe the dataframe was not necessary and I could have plotted ts() and forecast data alltogether if only I used the bloody group = 1 inside the aes () from the beninning!!!!!
 
 
-x_axis <- c("01", "02", "03", "04", "05", "06", "07", "08")
+x_axis <- c("01.21", "02.21", "03.21", "04.21", "05.21", "06.21", "07.21", "08.21", "09.21", "10.21", "11.21", "12.21", "01.22", "02.22", "03.22", "04.22", "05.22", "06.22", "07.22", "08.22")
+x_axis <- c("21_01", "21_02", "21_03", "21_04", "21_05", "21_06", "21_07", "21_08", "21_09", "21_10", "21_11", "21_12", "22_01", "22_02", "22_03", "22_04", "22_05", "22_06", "22_07", "22_08")
 
 # Conversion of time series and forecast data into a simple data frame with intelligible x axis
 a <- data.frame(x_month = x_axis, act = as.numeric(actual_data), fct_ets = as.numeric(fcst_ets$mean), fct_arima = as.numeric(fcst_arima$mean))
