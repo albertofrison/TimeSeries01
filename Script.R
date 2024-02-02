@@ -2,7 +2,7 @@
 # This files analyzes monthly Passengers Car Registrations Data as Time Series and makes a general review on time series tools
 # # Data Source: https://www.acea.auto/figure/passenger-car-registrations-in-europe-since-1990-by-country/
 #
-# Created with ♥ by Alberto Frison - July 2022
+# Created with ♥ by Alberto Frison in July 2022
 # Revised in February 2024
 # Thanks to Adam Check for the great YouTube videos: https://www.youtube.com/watch?v=dBNy_A6Zpcc
 # and to Scott Burk for the (quite complex) but inspiring YouTube Lectures: https://www.youtube.com/watch?v=HdYBuDMJ40Y&list=PLX-TyAzMwGs-I3i5uiCin37VFMSy4c50F&index=1
@@ -456,4 +456,3 @@ ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group 
 
 # Saving (last chart) to file // Remember: 1 inch = 96 pixels
 ggsave (filename = "charts/Chart01_Actual_vs_Forecasts_2022.png", device = "png", dpi = "retina", height = 1018/96, width = 1920/96)
-
