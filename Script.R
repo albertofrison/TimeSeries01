@@ -10,7 +10,7 @@
 ######################################################
 
 
-##### 
+#####
 # Section 00 - Initialization and Load of Packages
 rm (list =ls())   # clears all variables in the workspace
 library (fpp2)    # forecasting package
@@ -22,35 +22,36 @@ library (tseries) #used for some tests
 # Passenger Cars Registrations in Italy from 1990 - Today (refer to ACEA or DataForce websites to update the enclosed .csv)
 data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ",") 
 class (data) # data.frame
-head (data)
-tail (data)
+head (data) # first 06 records 
+tail (data) # last 06 records
 
-# Section 01a - Subdstituting 2 outliers in data due to COVID with monthly averages
+# Section 02 - Cleaning the Data
+# Substituting 2 outliers in data due to COVID with monthly averages
 # Unfortunately March and April 2020 shows two outliers, I chose to deal with them by substituting to them the mean of these months of the previous years
 # Note, I will also add May as by looking at RESIDUALS, while checking the forecast fit, it seems that even May 2020 is too extreme
-
-# Let's create a new dimension to store the month name (01 for January) so we can calculate monthly averages
-
-# I add here the Month_Name column to identify each month of the series
-data <- data %>%
-  mutate (Month_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%m"),
-          Year_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%Y"))
-
-# DO NOT DELETE ME - working with dates is always a HELL
-# in the as.Date function use TRYFORMATS to tell in which format the date is, then extract the YEAR (for instance) using the %Y in format()
-# format(as.Date("01/04/2020",tryFormats = "%d/%m/%Y"),"%Y")
 
 # Let's graphically see these outliers
 data %>%
   ggplot() +
   geom_boxplot(aes(x=Month_Name, y= Registrations))
 
-# Reason that 2022 registrations are difficult to forecast as the market is performing very badly in respect to the past years
+# Let's create a new dimension to store the month name (01 for January) so we can calculate monthly averages
+# I add here the Month_Name column to identify each month of the series
+data <- data %>%
+  mutate (Month_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%m"),
+          Year_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%Y"))
+
+# DO NOT DELETE ME as working with dates is always a HELL
+# in the as.Date function use TRYFORMATS to tell in which format the date is, then extract the YEAR (for instance) using the %Y in format()
+# format(as.Date("01/04/2020",tryFormats = "%d/%m/%Y"),"%Y")
+
+# Now we are there let's also have a look at the data by year
+# Note: the reason that 2022 registrations are difficult to forecast as the market is performing very badly in respect to the past years
 data %>%
   ggplot() +
   geom_boxplot(aes(x=Year_Name, y= Registrations))
 
-# Now I filter out the two "wrong" months and I calculate, visually, the averages
+# Now I filter out the two "wrong" months and I calculate, visually, the averages to be used to "correct" the outliers
 data %>%
   filter (Month != c("01/03/2020", "01/04/2020", "01/05/2020")) %>%
   group_by (Month_Name) %>%
@@ -67,6 +68,8 @@ data[which(data[,1]=="01/05/2020"),2] <- 184491
 # geom_boxplot(aes(x=Month_Name, y= Registrations))
 
 
+#####
+# Section 03 - Let's start to work with time series
 # DECLARING THE TIMESERIES
 # declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE 
 Y_entire <- ts(data[,2], start = c(1990,1), end = c(2023,12), frequency = 12) # remember to check the ending month at each update
@@ -77,6 +80,7 @@ tail (Y_entire) # it ends where it should - jan to june 2022 - therefore I expec
 
 
 # SELECTING THE TRAINING SET
+# in order to effectively understand the validy of our forecast modesl, we can split the data in two: the TRAINING set and the TEST set
 # this is the TRAINING SET --- you can play with the start // end of the training set to see what works better to forecast
 # for the sake of the exercise we can use the last year (2023) as test data and play with the rest of the data for the training set
 Y <- window (Y_entire, start = c(1990,1), end = c(2022,12))
@@ -84,10 +88,8 @@ head (Y) # deciding to start in xxxx is completely subjective
 tail (Y) # yes, we leave the remaining 2022 months outside the TRAINING SET to be used to evaluate the correctness of our foreasts
 
 
-
 #####
-# Section 02 - Preliminary Analysis
-
+# Section 04 - Preliminary Analysis
 # Time Plot - using autoplot function
 par (mfrow = c(1,1))
 autoplot (Y) + 
@@ -95,6 +97,7 @@ autoplot (Y) +
   ylab ("Registrations") +
   xlab ("Year")
 # data looks both SEASONAL (to be confirmed) and with a downward TREND
+
 
 # additional functions to analyse the time series
 # ggseasonplot
@@ -117,7 +120,12 @@ Acf (x) # NO correlation in random numbers
 # 02 A. STATIONARITY
 # Testing Stationarity of ts via UNIT ROOTS test and ACF plot
 # By looking at the series one could conclude that the serie is NOT stationary, but I cannot find a single test to confirm it.
-PP.test(Y) # p-value = 0.01 --> the serie is stationary
+# A stationary time series is one with the following properties:
+# a) Constant mean through time
+# b) Constant variance (auto covariance) through time
+# c) Statistical properties do not change and are consistent
+
+PP.test(Y, lshort = FALSE) # p-value = 0.01 --> the serie is stationary
 
 # in alternative, we ca use the AUgmented Dickey-Fuller Test
 # H0: the series has UNIT ROOT (non-statiornary)
@@ -217,7 +225,7 @@ Diff_methods[2,2] <- var (seasonal_diff_Y)
 # Seasonal means aims to subtract each data point by its respective group average, the monthly average
 # Y goes from 2005 to 2021 included
 seasonal_mean_Y <- data.frame (
-  year = rep (2005:2021, each = 12),
+  year = rep (1990:2022, each = 12),
   month = rep (1:12),
   value = Y) # prepare a dataframe to be used to calculate the MONTHLY AVERAGE in the next line of code
 
@@ -267,7 +275,8 @@ Pacf(Y,main="")
 
 # let's fit a potential arima model and see how it performs - since so far I undestood ZERO on how to interpret ACF and PACF to instruct a model
 # let's just take the hyperparamenters calculated automatically by the auto.arima function below
-fit_arima <- arima(Y, order = c(1,0,0), seasonal = c(2,1,1), include.mean = TRUE) # ARIMA(1,0,0)(2,1,1)[2] with drift
+
+fit_arima <- auto.arima(Y, stepwise = FALSE, approximation = FALSE, parallel = TRUE, allowdrift = TRUE)
 
 # Techniques to check the FIT of a Model
 # a.look at the ERRORS TABLE (ME,MAE, RMSE, ....) and the VARIANCE # 443.412.708
@@ -282,7 +291,7 @@ mean(fit_arima$residuals) # this is he MEAN ERROR, the first error type (ME) ret
 # c. let's see Lijung-Box Test
 # this test is a statistical test that measure whether or not a group of auto-correlations in a time series are different from ZERO
 # if the p-value of the test is GREATED than 0.05 (5%) then we do NOT reject the null hypotheses and conclude that the model is a good fit
-Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) #p-value = 0.9686 > 5% so the model is a good fit for the data
+Box.test (fit_arima$residuals, type = "Ljung-Box", lag = 24) #p-value = xxxx > 5% so the model is a good fit for the data
 
 
 # d. AKAIKE INFORMATION CRITERION (AIC) or, a measure of the trade-between the goodness of the fit of the model and the number of parameters in the model
@@ -297,7 +306,7 @@ aic_result <- numeric (4) #
 for (p in 0:2) {
   for (d in 0:2) {
     for (q in 0:2) {
-      aic <- arima (Y, order = c(p,d,q), seasonal = c(2,1,1), include.drift = TRUE)$aic  
+      aic <- arima (Y, order = c(p,d,q), seasonal = c(2,1,1))$aic  
       aic_result <- rbind(aic_result, c(p,d,q,aic))
     }
   }
@@ -306,9 +315,12 @@ for (p in 0:2) {
 aic_result <- aic_result [-1,]
 colnames (aic_result) <- c("p","d","q", "AIC")
 aic_result
-min(aic_result[,4]) #4095.542 order = c(1,2,2)
+min(aic_result[,4]) #8597.504 c(2,2,1)
 
-# looking at the model fit here below the best ARIMA model is Best model: # ARIMA(1,0,0)(2,1,1)[2] with drift
+
+
+
+# looking at the model fit here below the best ARIMA model is Best model: # ARIMA(3,0,0)(0,1,2)[12] 
 # fit_arima <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE)
 # I am not sure why my AIC reports a different result := here the LOWEST AIC is at 4.371.436 order = c(1,2,2)
 
@@ -317,24 +329,23 @@ min(aic_result[,4]) #4095.542 order = c(1,2,2)
 # Section 03B  Let's try to forecast
 # 01. Benchmark Methods - SEASONAL NAIVE METHOD: T_y = T_(y-s) + Random Error
 # Remember to use the DIFFERENCE DATA and not the RAW DATA due to the TREND
-fit <- snaive(DY) 
-print(summary(fit))   
-checkresiduals(fit)
-class(fit) 
-# snaive doesn't look that performs very well, SD is 28k cars and ACF chart suggest lots of autocorrelation
+fit_snaive <- snaive(DY) # RESISUAL STD DEV = 24519.7198
+print(summary(fit_snaive))   
+checkresiduals(fit_snaive)
+class(fit_snaive) 
+# snaive doesn't look that performs very well, SD is 24519.7198 cars and ACF chart suggest lots of autocorrelation
+
 
 # as alternative to checkresiduals function
-res <- residuals (fit)
+res <- residuals (fit_snaive)
 Acf(res, main ="ACF of Residuals - Naive Method")
 hist(res, nclass= "FD", main ="Histogram of Residuals - Naive Method")
-
-
-
 
 #-----------------
 # 02. Exponential Smoothing Model 
 # We can use REGULAR RAW DATA
-fit_ets <- ets(Y)         #tries a number of exponential smoothing models and returns the best
+# tries a number of exponential smoothing models and returns the best
+fit_ets <- ets(Y)         
 print(summary(fit_ets))   
 checkresiduals(fit_ets)
 
@@ -345,15 +356,8 @@ checkresiduals(fit_ets)
 # 03. ARIMA
 # Auto.arima automatically fits the best model with differing (p,d,q) coordinates - then the BEST model is the one with the LOWEST BIC (Bayesian Info Criterion)
 fit_arima <- auto.arima (Y, stepwise = FALSE, approximation = FALSE, trace = TRUE)
-# TRAINING SET 2005 - 2020 WITH March, April and May 2020= mean() --> Best Model --> ARIMA(1,0,1)(0,1,2)[12] 
-# TRAINING SET 2011 - 2020 WITH March, April and May 2020= mean() --> Best Model --> ARIMA(0,1,1)(0,1,2)[12] 
-
 print(summary(fit_arima))
 sqrt (fit_arima$sigma2) # This is the STD DEV of the Model, a measure of accuracy
-# TRAINING SET 2011 - 2020 WITH March, April and May 2020= mean() --> SD = 10741.9
-
-# (Old comment) Residual SD 21293.75 #warning ARIMA returns VARIANCE ==> SD^2  // 21161.46 (1990 - 2020)
-
 checkresiduals(fit_arima)
 
 
@@ -413,8 +417,8 @@ legend ("bottomleft", legend = c("2023 - Actuals", "ETS Method Forecast", "ARIMA
 # now that I think about it , maybe the dataframe was not necessary and I could have plotted ts() and forecast data alltogether if only I used the bloody group = 1 inside the aes () from the beninning!!!!!
 
 
-x_axis <- c("01.21", "02.21", "03.21", "04.21", "05.21", "06.21", "07.21", "08.21", "09.21", "10.21", "11.21", "12.21", "01.22", "02.22", "03.22", "04.22", "05.22", "06.22", "07.22", "08.22")
-x_axis <- c("21_01", "21_02", "21_03", "21_04", "21_05", "21_06", "21_07", "21_08", "21_09", "21_10", "21_11", "21_12", "22_01", "22_02", "22_03", "22_04", "22_05", "22_06", "22_07", "22_08")
+x_axis <- c("01.23", "02.23", "03.23", "04.23", "05.23", "06.23", "07.23", "08.23", "09.23", "10.23", "11.23", "12.23")
+x_axis <- c("23_01", "23_02", "23_03", "23_04", "23_05", "23_06", "23_07", "23_08", "23_09", "23_10", "23_11", "23_12")
 
 # Conversion of time series and forecast data into a simple data frame with intelligible x axis
 a <- data.frame(x_month = x_axis, act = as.numeric(actual_data), fct_ets = as.numeric(fcst_ets$mean), fct_arima = as.numeric(fcst_arima$mean))
@@ -455,4 +459,4 @@ ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group 
   scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
 
 # Saving (last chart) to file // Remember: 1 inch = 96 pixels
-ggsave (filename = "charts/Chart01_Actual_vs_Forecasts_2022.png", device = "png", dpi = "retina", height = 1018/96, width = 1920/96)
+ggsave (filename = "charts/Chart01_Actual_vs_Forecasts_2023.png", device = "png", dpi = "retina", height = 1018/96, width = 1920/96)
