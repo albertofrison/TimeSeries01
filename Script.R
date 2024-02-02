@@ -3,6 +3,7 @@
 # # Data Source: https://www.acea.auto/figure/passenger-car-registrations-in-europe-since-1990-by-country/
 #
 # Created with ♥ by Alberto Frison - July 2022
+# Revised in February 2024
 # Thanks to Adam Check for the great YouTube videos: https://www.youtube.com/watch?v=dBNy_A6Zpcc
 # and to Scott Burk for the (quite complex) but inspiring YouTube Lectures: https://www.youtube.com/watch?v=HdYBuDMJ40Y&list=PLX-TyAzMwGs-I3i5uiCin37VFMSy4c50F&index=1
 # and to this article - https://towardsdatascience.com/beginners-introduction-to-time-series-analysis-and-forecasting-c2c2918603d9
@@ -16,14 +17,13 @@ library (fpp2)    # forecasting package
 library (tidyverse) #we will need to tidy the data - later - for plotting on ggplot the right way
 library (tseries) #used for some tests
 
-
 ##### 
 # Section 01 - Loading the Data
 # Passenger Cars Registrations in Italy from 1990 - Today (refer to ACEA or DataForce websites to update the enclosed .csv)
-data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ";") 
-#class (data) # data.frame
-#head (data)
-#tail (data)
+data <- read.delim ("data/Passengers_Cars_Registrations_Italy.csv", sep = ",") 
+class (data) # data.frame
+head (data)
+tail (data)
 
 # Section 01a - Subdstituting 2 outliers in data due to COVID with monthly averages
 # Unfortunately March and April 2020 shows two outliers, I chose to deal with them by substituting to them the mean of these months of the previous years
@@ -57,29 +57,37 @@ data %>%
   summarize (Mean = mean(Registrations))
 
 # Finally I substitute the averages into the "actual" data
-data[which(data[,1]=="01/03/2020"),2] <- 207674
-data[which(data[,1]=="01/04/2020"),2] <- 177806
-data[which(data[,1]=="01/05/2020"),2] <- 185555
+data[which(data[,1]=="01/03/2020"),2] <- 201242
+data[which(data[,1]=="01/04/2020"),2] <- 171174
+data[which(data[,1]=="01/05/2020"),2] <- 184491
+
 # ... now if you run the boxplot chart here above the outliers have disappeared...
+#data %>%
+# ggplot() +
+# geom_boxplot(aes(x=Month_Name, y= Registrations))
 
 
 # DECLARING THE TIMESERIES
 # declare a new variable Y as Time Series (just the second column) - Y_entire gets the WHOLE 
-Y_entire <- ts(data[,2], start = c(1990,1), end = c(2022,8), frequency = 12) # remember to check the ending month at each update
+Y_entire <- ts(data[,2], start = c(1990,1), end = c(2023,12), frequency = 12) # remember to check the ending month at each update
 class (Y_entire) # time series
 head (Y_entire) # this is consistent with the head() of the data.frame only that now is a ts() format
 tail (Y_entire) # it ends where it should - jan to june 2022 - therefore I expect no errors in the ts() definition
 
 
+
 # SELECTING THE TRAINING SET
 # this is the TRAINING SET --- you can play with the start // end of the training set to see what works better to forecast
-Y <- window (Y_entire, start = c(2011,1), end = c(2020,12))
-head (Y) # deciding to start in 2005 is completely subjective
+# for the sake of the exercise we can use the last year (2023) as test data and play with the rest of the data for the training set
+Y <- window (Y_entire, start = c(1990,1), end = c(2022,12))
+head (Y) # deciding to start in xxxx is completely subjective
 tail (Y) # yes, we leave the remaining 2022 months outside the TRAINING SET to be used to evaluate the correctness of our foreasts
+
 
 
 #####
 # Section 02 - Preliminary Analysis
+
 # Time Plot - using autoplot function
 par (mfrow = c(1,1))
 autoplot (Y) + 
@@ -87,6 +95,24 @@ autoplot (Y) +
   ylab ("Registrations") +
   xlab ("Year")
 # data looks both SEASONAL (to be confirmed) and with a downward TREND
+
+# additional functions to analyse the time series
+# ggseasonplot
+ggseasonplot(Y, ylab = "Registrations", xlab = "Month", main = "New Passengers Cars Registration [Italy]", year.labels = TRUE, year.labels.left = TRUE, col= 1:20)
+
+#ggmonthplot
+ggmonthplot(Y, ylab = "Registrations", xlab = "Month", main = "New Passengers Cars Registration [Italy]")
+
+# CORRELATION AND HOW TO EXPLORE IT 
+lag.plot(Y, lags =12, do.lines = FALSE) # the ggmonthplot highlighted that monthly registration values were correlated, now at lag 12 it becomes clear that data is autocorrelated
+Acf(Y) # see Lag #12 and Lag #24
+
+# small section on correlation on random numbers (you guess it there is none)
+set.seed (100)
+x <- ts(rnorm(1000)) # 1000 numbers randomly generated from a normal distribution
+plot (x, main = "white noise")
+Acf (x) # NO correlation in random numbers
+
 
 # 02 A. STATIONARITY
 # Testing Stationarity of ts via UNIT ROOTS test and ACF plot
@@ -103,13 +129,16 @@ Pacf(Y)
 
 # DIFFERENCE FUNCTION DATA TO GET RID OF THE TREND
 DY <- diff(Y) # First Difference of the Time Series - DY now contains the month over month changes in the time series
-PP.test(DY)
-Acf(DY)
 
 autoplot (DY) + 
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Difference") +
   xlab ("Year")
+# now the trend has been removed
+
+PP.test(DY)
+Acf(DY)
+
 
 # 02 B. BONUS CHAPTER - HOW MANI TIMES YOU NEED TO DIFFERENCIATE?
 # To determine the number of times to difference a time series, we can choose the one that gives the lowest overall variance.
@@ -156,15 +185,16 @@ par(mfrow=c(1, 1)) # resets to graphical pararemeter to 1 row by 1 column
 
 # 02 D. INVESTIGATING SEASONALITY
 # ONE WAY TO LOOK AT SEASONALITY
-ggseasonplot (Y) +
+ggseasonplot (DY) +
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Difference")
 # there is a clear seasonality in the data with increase of sales in January, as well as March, June and September and a decrease in August
 
 # SECOND WAY TO EXPLORE SEASONALITY
-ggsubseriesplot(Y) +
+ggsubseriesplot(DY) +
   ggtitle ("New Passengers Cars Registrations [Italy]") + 
   ylab ("Registration - Month over Month Seasonality")
+
 # CONCLUSION: THE SERIES HAS TREND AND SEASONALITY, WE CAN NOW EXPLORE DIFFERENT WAYS TO FORECAST FOR THE FUTURE
 
 # HOW TO GET RID OF SEASONALITY ? 
@@ -336,15 +366,15 @@ checkresiduals(fit_arima)
 #plot(fcst_snv)
 
 # ETS Forecast
-fcst_ets <- forecast(fit_ets,h=20) # remember to change the number of months (8 for Jan to Aug)
+fcst_ets <- forecast(fit_ets,h=12) # remember to change the number of months (8 for Jan to Aug)
 
 # ARIMA Forecast
-fcst_arima <- forecast(fit_arima,h=20)
+fcst_arima <- forecast(fit_arima,h=12)
 
 
 #####
 # Check Forecasts against Actuals
-actual_data <- window (Y_entire, start = c(2021,1))
+actual_data <- window (Y_entire, start = c(2023,1))
 
 # SNAIVE METHOD
 #accuracy (fcst_snv,actual_data)
@@ -361,13 +391,13 @@ autoplot(fcst_arima)
 
 # PLOTTING 
 par (mfrow = c(1,1)) 
-plot (actual_data, ylim = c (60000,150000), main ="Italian Market - New Car Registrations - Forecast")
+plot (actual_data, ylim = c (60000,200000), main ="Italian Market - New Car Registrations - Forecast")
 points(actual_data, col = "black", pch = 19)
 lines(fcst_ets$mean, lty= "solid", col = "red")
 points(fcst_ets$mean, col = "red")
 lines(fcst_arima$mean, lty="solid", col = "blue")
 points(fcst_arima$mean, col = "blue")
-legend ("bottomleft", legend = c("2022 - Actuals", "ETS Method Forecast", "ARIMA Forecast"), lty = "solid", col = c("black","red", "blue"))
+legend ("bottomleft", legend = c("2023 - Actuals", "ETS Method Forecast", "ARIMA Forecast"), lty = "solid", col = c("black","red", "blue"))
 
 
 #####
