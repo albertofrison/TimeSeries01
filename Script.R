@@ -42,13 +42,10 @@ data <- data %>%
 data %>%
   ggplot() +
   geom_boxplot(aes(x=Month_Name, y= Registrations))
-<<<<<<< HEAD
-=======
 
 # DO NOT DELETE ME as working with dates is always a HELL
 # in the as.Date function use TRYFORMATS to tell in which format the date is, then extract the YEAR (for instance) using the %Y in format()
 # format(as.Date("01/04/2020",tryFormats = "%d/%m/%Y"),"%Y")
->>>>>>> 5be947b5ac13e7219088e063dcd5711cdfe36e06
 
 # Now we are there let's also have a look at the data by year
 # Note: the reason that 2022 registrations are difficult to forecast as the market is performing very badly in respect to the past years
@@ -471,16 +468,13 @@ ggsave (filename = "charts/Chart01_Actual_vs_Forecasts_2023.png", device = "png"
 ################################################################################
 #####
 # Section dedicated to forecast 2024 data
-<<<<<<< HEAD
 # Remember to fully perform all code from Sections 00 - 02 before this section
 
 # new ts series containing the training data - including 2023
 Y_2024 <- window (Y_entire, start = c(2017,1), end = c(2023,12))
-=======
 
 # new ts series containing the training data - including 2023
 Y_2024 <- window (Y_entire, start = c(2019,1), end = c(2023,12))
->>>>>>> 5be947b5ac13e7219088e063dcd5711cdfe36e06
 
 # Time Plot - using autoplot function
 par (mfrow = c(1,1))
@@ -542,13 +536,10 @@ autoplot(fcst_ets_2024)
 
 # ARIMA Forecast
 fcst_arima_2024 <- forecast(fit_arima_2024,h=12)
-<<<<<<< HEAD
 autoplot(fcst_arima_2024) 
-=======
 autoplot(fcst_arima_2024)
 
->>>>>>> 5be947b5ac13e7219088e063dcd5711cdfe36e06
-
+# x_axis is needed to solve some plottin issues
 x_axis <- c("24_01", "24_02", "24_03", "24_04", "24_05", "24_06", "24_07", "24_08", "24_09", "24_10", "24_11", "24_12")
 
 # Conversion of time series and forecast data into a simple data frame with intelligible x axis
@@ -558,11 +549,8 @@ a <- data.frame(x_month = x_axis, past_year = as.numeric(data_2023), fct_ets_202
 b <- a %>%
   pivot_longer(c("past_year", "fct_ets_2024","fct_arima_2024"), names_to = "type", values_to = "val")
 
-<<<<<<< HEAD
 ggplot (data = b, aes (x = x_month, y = val, color = type, group = type)) +
-=======
 ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group = type)) +
->>>>>>> 5be947b5ac13e7219088e063dcd5711cdfe36e06
   geom_point() +
   geom_line() +
   labs (title = "FORECAST Year 2024 Passengers' Cars Registration in Italy",
