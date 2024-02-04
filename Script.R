@@ -30,16 +30,16 @@ tail (data) # last 06 records
 # Unfortunately March and April 2020 shows two outliers, I chose to deal with them by substituting to them the mean of these months of the previous years
 # Note, I will also add May as by looking at RESIDUALS, while checking the forecast fit, it seems that even May 2020 is too extreme
 
-# Let's graphically see these outliers
-data %>%
-  ggplot() +
-  geom_boxplot(aes(x=Month_Name, y= Registrations))
-
 # Let's create a new dimension to store the month name (01 for January) so we can calculate monthly averages
 # I add here the Month_Name column to identify each month of the series
 data <- data %>%
   mutate (Month_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%m"),
           Year_Name = format(as.Date(Month, tryFormats = "%d/%m/%Y"),"%Y"))
+
+# Let's graphically see these outliers
+data %>%
+  ggplot() +
+  geom_boxplot(aes(x=Month_Name, y= Registrations))
 
 # DO NOT DELETE ME as working with dates is always a HELL
 # in the as.Date function use TRYFORMATS to tell in which format the date is, then extract the YEAR (for instance) using the %Y in format()
@@ -76,7 +76,6 @@ Y_entire <- ts(data[,2], start = c(1990,1), end = c(2023,12), frequency = 12) # 
 class (Y_entire) # time series
 head (Y_entire) # this is consistent with the head() of the data.frame only that now is a ts() format
 tail (Y_entire) # it ends where it should - jan to june 2022 - therefore I expect no errors in the ts() definition
-
 
 
 # SELECTING THE TRAINING SET
@@ -460,3 +459,97 @@ ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group 
 
 # Saving (last chart) to file // Remember: 1 inch = 96 pixels
 ggsave (filename = "charts/Chart01_Actual_vs_Forecasts_2023.png", device = "png", dpi = "retina", height = 1018/96, width = 1920/96)
+
+
+
+################################################################################
+#####
+# Section dedicated to forecast 2024 data
+
+# new ts series containing the training data - including 2023
+Y_2024 <- window (Y_entire, start = c(2019,1), end = c(2023,12))
+
+# Time Plot - using autoplot function
+par (mfrow = c(1,1))
+autoplot (Y_2024) + 
+  ggtitle ("New Passengers Cars Registrations [Italy]") + 
+  ylab ("Registrations") +
+  xlab ("Year")
+# data looks both SEASONAL (to be confirmed) and with a downward TREND
+
+# ggseasonplot
+ggseasonplot(Y_2024, ylab = "Registrations", xlab = "Month", main = "New Passengers Cars Registration [Italy]", year.labels = TRUE, year.labels.left = TRUE, col= 1:20)
+
+#ggmonthplot
+ggmonthplot(Y_2024, ylab = "Registrations", xlab = "Month", main = "New Passengers Cars Registration [Italy]")
+
+lag.plot(Y_2024, lags =12, do.lines = FALSE) # the ggmonthplot highlighted that monthly registration values were correlated, now at lag 12 it becomes clear that data is autocorrelated
+Acf(Y_2024) # see Lag #12 and Lag #24
+
+DY_2024 <- diff(Y_2024) # First Difference of the Time Series - DY now contains the month over month changes in the time series
+
+autoplot (DY_2024) + 
+  ggtitle ("New Passengers Cars Registrations [Italy]") + 
+  ylab ("Registration - Month over Month Difference") +
+  xlab ("Year")
+# now the trend has been removed
+
+pp.test(DY_2024)
+Acf (DY_2024)
+
+
+m <- matrix(c(1,1,2,3),2,2,byrow = TRUE)
+layout(m)
+plot (Y_2024, main= "", ylab ="")
+abline(a = mean(Y_2024), b =0, lty = 3, col = "blue") #mean
+abline(a = mean(Y_2024) + sd(Y), b =0, lty = 4, col = "red") #mean +sd
+abline(a = mean(Y_2024) - sd(Y), b =0, lty = 4, col = "red") #mean +sd
+Acf(Y_2024,main="")
+Pacf(Y_2024,main="")
+
+##### MODELLING SECTION
+# ARIMA MODEL
+fit_arima_2024 <- auto.arima(Y_2024, stepwise = FALSE, approximation = FALSE, parallel = TRUE, allowdrift = TRUE)
+print(summary(fit_arima_2024)) # here you check errors Mean Error, RMSE, Mean Percentage Error, and so on
+checkresiduals(fit_arima_2024)  # yes, except LAG-13 where there is a significant plot
+mean(fit_arima_2024$residuals) # this is he MEAN ERROR, the first error type (ME) returned by summary(fit_arima)
+
+Box.test (fit_arima_2024$residuals, type = "Ljung-Box", lag = 24)
+
+#EXPONENTIAL SMOOTHING
+fit_ets_2024 <- ets(Y_2024)         
+print(summary(fit_ets_2024))   
+checkresiduals(fit_ets_2024)
+
+
+##### FORECAST SECTION
+# ETS Forecast
+fcst_ets_2024 <- forecast(fit_ets_2024,h=12) # remember to change the number of months (8 for Jan to Aug)
+autoplot(fcst_ets_2024)
+
+# ARIMA Forecast
+fcst_arima_2024 <- forecast(fit_arima_2024,h=12)
+autoplot(fcst_arima_2024)
+
+
+x_axis <- c("24_01", "24_02", "24_03", "24_04", "24_05", "24_06", "24_07", "24_08", "24_09", "24_10", "24_11", "24_12")
+
+# Conversion of time series and forecast data into a simple data frame with intelligible x axis
+data_2023 <- window (Y_entire, start = c(2023,1))
+a <- data.frame(x_month = x_axis, past_year = as.numeric(data_2023), fct_ets_2024 = as.numeric(fcst_ets_2024$mean), fct_arima_2024 = as.numeric(fcst_arima_2024$mean))
+
+b <- a %>%
+  pivot_longer(c("past_year", "fct_ets_2024","fct_arima_2024"), names_to = "type", values_to = "val")
+
+ggplot (data = b, aes (x = x_month, y = val, linetype=type, color = type, group = type)) +
+  geom_point() +
+  geom_line() +
+  labs (title = "FORECAST Year 2024 Passengers' Cars Registration in Italy",
+        subtitle = "Arima and ETS Forecast Methods",
+        caption = "Made with ♥ by Alberto Frison - https://github.com/albertofrison/TimeSeries01") +
+  xlab("Month") +
+  ylab("Registrations #units")+
+  scale_y_continuous(labels = scales::comma) # adds the comma in the thousands
+
+# Saving (last chart) to file // Remember: 1 inch = 96 pixels
+ggsave (filename = "charts/Chart01_Forecasts_2024_V04.02.2024.png", device = "png", dpi = "retina", height = 1018/96, width = 1920/96)
